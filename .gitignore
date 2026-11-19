@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Environment files
+.env
+
+# Docker secret test artifacts
+part1/secrets/secret.txt
+part1/secrets/*.tar
+part1/secrets/safe-layer/
+part1/secrets/leaky-layer/
