@@ -1,3 +1,4 @@
+
 """Queue stored as one name per line.
 
 The HTTP server must call these functions. Tests call them directly,
@@ -6,7 +7,36 @@ with a temporary directory, and do not start Docker.
 
 from __future__ import annotations
 
+import fcntl
+import os
+import tempfile
 from pathlib import Path
+
+
+def _write_names(queue_path: Path, names: list[str]) -> None:
+    """Atomically replace the queue file."""
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=queue_path.parent,
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(
+                "\n".join(names) + ("\n" if names else "")
+            )
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+
+        os.replace(temp_path, queue_path)
+
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 def join(path: str | Path, name: str) -> int:
@@ -22,41 +52,46 @@ def join(path: str | Path, name: str) -> int:
         raise ValueError("Invalid name")
 
     queue_path = Path(path)
-
-    if queue_path.exists():
-        names = queue_path.read_text(encoding="utf-8").splitlines()
-    else:
-        names = []
-
-    names.append(cleaned_name)
-
     queue_path.parent.mkdir(parents=True, exist_ok=True)
-    queue_path.write_text(
-        "\n".join(names) + "\n",
-        encoding="utf-8",
-    )
+    lock_path = queue_path.parent / "queue.lock"
 
-    return len(names)
+    with lock_path.open("a") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+
+        if queue_path.exists():
+            names = queue_path.read_text(
+                encoding="utf-8"
+            ).splitlines()
+        else:
+            names = []
+
+        names.append(cleaned_name)
+        _write_names(queue_path, names)
+
+        return len(names)
 
 
 def take(path: str | Path) -> str:
     """Remove and return the first name."""
 
     queue_path = Path(path)
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = queue_path.parent / "queue.lock"
 
-    if not queue_path.exists():
-        raise LookupError("Queue is empty")
+    with lock_path.open("a") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
 
-    names = queue_path.read_text(encoding="utf-8").splitlines()
+        if not queue_path.exists():
+            raise LookupError("Queue is empty")
 
-    if not names:
-        raise LookupError("Queue is empty")
+        names = queue_path.read_text(
+            encoding="utf-8"
+        ).splitlines()
 
-    first_name = names.pop(0)
+        if not names:
+            raise LookupError("Queue is empty")
 
-    queue_path.write_text(
-        "\n".join(names) + ("\n" if names else ""),
-        encoding="utf-8",
-    )
+        first_name = names.pop(0)
+        _write_names(queue_path, names)
 
-    return first_name
+        return first_name
