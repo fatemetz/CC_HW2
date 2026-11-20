@@ -6,10 +6,10 @@ This consumes the queue; use only a separate, empty test queue.
 """
 
 import argparse
-from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 import json
 import threading
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
