@@ -39,16 +39,16 @@ def serve(host: str, port: int, data_dir: str) -> None:
                     data = json.loads(body)
 
                     if not isinstance(data, dict):
-                        raise ValueError("Invalid JSON object")
+                        raise TypeError("Invalid JSON object")
 
                     name = data.get("name")
                     if not isinstance(name, str):
-                        raise ValueError("Invalid name")
+                        raise TypeError("Invalid name")
 
                     ticket = join(queue_path, name)
                     self.send_text(200, str(ticket))
 
-                except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
                     self.send_text(400, "invalid name")
 
             elif self.path == "/next":
@@ -62,7 +62,7 @@ def serve(host: str, port: int, data_dir: str) -> None:
                 self.send_text(404, "not found")
 
         def log_message(self, format: str, *args: object) -> None:
-            print("%s - %s" % (self.address_string(), format % args))
+            print(f"{self.address_string()} - {format % args}")
 
     server = ThreadingHTTPServer((host, port), QueueHandler)
     print(f"Queue server listening on {host}:{port}")
